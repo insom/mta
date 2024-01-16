@@ -6,28 +6,16 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
-/*
- * RFC 5321 + 821
- * 220
- * HELO + response (or)
- * EHLO + extensions (8BITMIME?)
- * MAIL FROM
- * RCPT TO
- * DATA->354 (if good)
- * . -> 250 (if good)
- * (reset state machine?)
- * ^ also RSET->250 (go back to helo.ehlo state, if applicable)
- * NOOP, why not
- * QUIT->221
- *
- * 450 for temp blocked
+#define BUFSZ 512
+
+#define RES_NOOP 0
+#define RES_QUIT 1
+
+/* 450 for temp blocked
  * 452 out of space
  */
 
-/* Add received line, from header (check maildir)
- * CRLF to LF conversion?
- * Envelope-From header?
- *
+/*
  * Return-path: <bounce-..@com>
    Envelope-to: you@dot.com
    Delivery-date: Mon, 08 Jan 2024 09:01:19 +0000
@@ -47,6 +35,8 @@ int handle_line(void) {
     size_t line_bufsz = 0;
     size_t line_length = getline(&line, &line_bufsz, stdin);
     char *original_line = line; // for freeing later
+
+    if(line_length == -1) return RES_QUIT;
 
     char *verb = strsep(&line, " \r\n");
 
@@ -68,12 +58,11 @@ int handle_line(void) {
     return res;
 }
 
-#define RES_NOOP 0
-#define RES_QUIT 1
-
 struct utsname uts;
 struct sockaddr peer;
 socklen_t peersz = sizeof(peer);
+char from_email[BUFSZ] = {0};
+char to_email[BUFSZ] = {0};
 
 int main(int c, char **v) {
     uname(&uts);
@@ -91,12 +80,60 @@ int main(int c, char **v) {
 }
 
 int HELO(char *verb, char *rest) {
-    char host[512] = {0};
-    int err = getnameinfo(&peer, peersz, host, 512, NULL, 0, NI_NUMERICHOST);
+    char host[BUFSZ] = {0};
+    int err = getnameinfo(&peer, peersz, host, BUFSZ, NULL, 0, NI_NUMERICHOST);
     if(err != 0) {
         strcpy(host, "unknown"); // it's cool, I can trust me.
     }
     printf("250 %s hi. [%s]\n", uts.nodename, host);
+    return RES_NOOP;
+}
+
+int MAIL(char *verb, char *rest) {
+    // rest ~= "FROM:<email@address>\s.*"
+    if(strlen(rest) > 5) {
+        rest += 5;
+    } else {
+        printf("553 no.\n");
+        return RES_NOOP;
+    }
+    if(*rest == '<') rest++;
+    char *email = strsep(&rest, "> \r\n");
+    // copy, because the buffer we're using is about to get freed.
+    strncpy(from_email, email, strlen(email));
+    printf("250 cq de %s.\n", from_email);
+    return RES_NOOP;
+}
+
+int RCPT(char *verb, char *rest) {
+    // rest ~= "TO:<email@address>\s.*"
+    if(strlen(rest) > 3) {
+        rest += 3;
+    } else {
+        printf("553 no.\n");
+        return RES_NOOP;
+    }
+    if(*rest == '<') rest++;
+    char *email = strsep(&rest, "> \r\n");
+    // copy for above reason.
+    // todo: you're better than this.
+    if(strcasecmp("xeu@ve3x.eu", email) == 0) {
+        strncpy(to_email, email, strlen(email));
+        printf("250 %s de %s.\n", to_email, from_email);
+    } else {
+        printf("550 not interested.\n");
+    }
+    return RES_NOOP;
+}
+
+int DATA(char *verb, char *rest) {
+    if(strlen(to_email) == 0 || strlen(from_email) == 0) {
+        printf("503 upps.\n");
+        return RES_NOOP;
+    }
+    printf("354 upps.\n");
+    bzero(from_email, BUFSZ);
+    bzero(to_email, BUFSZ);
     return RES_NOOP;
 }
 
@@ -106,7 +143,10 @@ int QUIT(char *verb, char *rest) {
 }
 
 struct dispatchEntry dispatch_table[] = {
-    {"HELO", HELO},
+    {"HELO", HELO}, {"EHLO", HELO},
+    {"MAIL", MAIL},
+    {"RCPT", RCPT},
+    {"DATA", DATA},
     {"QUIT", QUIT},
     {NULL, NULL},
 };
