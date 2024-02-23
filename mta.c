@@ -15,13 +15,6 @@
  * 452 out of space
  */
 
-/*
- * Return-path: <bounce-..@com>
-   Envelope-to: you@dot.com
-   Delivery-date: Mon, 08 Jan 2024 09:01:19 +0000
-   Received: from their.hostname ([ip.addr])
- */
-
 struct dispatchEntry {
     char *verb;
     int (*f)(char *verb, char *rest);
@@ -44,7 +37,7 @@ int handle_line(void) {
     for(;;) {
         if(dispatch_table[i].verb == NULL) {
             // did not match anything we know about.
-            printf("500 uwotm8?\n");
+            printf("500 uwotm8?\r\n");
             break;
         }
         if(strcasecmp(dispatch_table[i].verb, verb) == 0) {
@@ -63,6 +56,7 @@ struct sockaddr peer;
 socklen_t peersz = sizeof(peer);
 char from_email[BUFSZ] = {0};
 char to_email[BUFSZ] = {0};
+char host[BUFSZ] = {0};
 
 int main(int c, char **v) {
     uname(&uts);
@@ -80,12 +74,11 @@ int main(int c, char **v) {
 }
 
 int HELO(char *verb, char *rest) {
-    char host[BUFSZ] = {0};
     int err = getnameinfo(&peer, peersz, host, BUFSZ, NULL, 0, NI_NUMERICHOST);
     if(err != 0) {
         strcpy(host, "unknown"); // it's cool, I can trust me.
     }
-    printf("250 %s hi. [%s]\n", uts.nodename, host);
+    printf("250 %s hi. [%s]\r\n", uts.nodename, host);
     return RES_NOOP;
 }
 
@@ -94,7 +87,7 @@ int MAIL(char *verb, char *rest) {
     if(strlen(rest) > 5) {
         rest += 5;
     } else {
-        printf("553 no.\n");
+        printf("553 no.\r\n");
         return RES_NOOP;
     }
     if(*rest == '<') rest++;
@@ -110,7 +103,7 @@ int RCPT(char *verb, char *rest) {
     if(strlen(rest) > 3) {
         rest += 3;
     } else {
-        printf("553 no.\n");
+        printf("553 no.\r\n");
         return RES_NOOP;
     }
     if(*rest == '<') rest++;
@@ -119,26 +112,53 @@ int RCPT(char *verb, char *rest) {
     // todo: you're better than this.
     if(strcasecmp("xeu@ve3x.eu", email) == 0) {
         strncpy(to_email, email, strlen(email));
-        printf("250 %s de %s.\n", to_email, from_email);
+        printf("250 %s de %s.\r\n", to_email, from_email);
     } else {
-        printf("550 not interested.\n");
+        printf("550 not interested.\r\n");
     }
     return RES_NOOP;
 }
 
 int DATA(char *verb, char *rest) {
     if(strlen(to_email) == 0 || strlen(from_email) == 0) {
-        printf("503 upps.\n");
+        printf("503 upps.\r\n");
         return RES_NOOP;
     }
-    printf("354 upps.\n");
+    printf("354 go on.\r\n");
+    fflush(stdout);
+    // then 250 after the last `.`
+    FILE *mb = fopen("mailbox", "w");
+    fprintf(mb, "Return-path: <%s>\n", from_email);
+    fprintf(mb, "Envelope-to: %s\n", to_email);
+    fprintf(mb, "Delivery-date: Mon, 08 Jan 2024 09:01:19 +0000\n");
+    fprintf(mb, "Received: from %s ([ip.addr])\n", host);
+
+    char *line = NULL;
+    size_t line_bufsz = 0;
+    for(;;) {
+        size_t line_length = getline(&line, &line_bufsz, stdin);
+        if(line_length == -1) return RES_QUIT;
+        if(strcasecmp(line, ".\r\n") == 0) {
+            printf("200 yuhuh.\r\n");
+            fclose(mb);
+            goto end;
+        } else {
+            char *orig_line = strsep(&line, "\r\n");
+            line = orig_line;
+            if(*orig_line == '.') orig_line++;
+            fprintf(mb, "%s\n", orig_line);
+        }
+    }
+
+end:
+    if(line != NULL) free(line);
     bzero(from_email, BUFSZ);
     bzero(to_email, BUFSZ);
     return RES_NOOP;
 }
 
 int QUIT(char *verb, char *rest) {
-    printf("220 bye.\n");
+    printf("220 bye.\r\n");
     return RES_QUIT;
 }
 

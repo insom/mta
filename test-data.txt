@@ -1,0 +1,10 @@
+HELO world
+MAIL FROM:insom@iol.ie
+RCPT TO:xeu@ve3x.eu
+DATA
+Header: data
+
+something somthing
+..asd
+.
+QUIT
