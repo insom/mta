@@ -1,3 +1,8 @@
+/* (c) 2024 Aaron Brady, GPLv3 (see LICENSE) */
+
+#define HOMEDIR "/home/insom"
+#define EMAIL_ADDRESS "xeu@ve3x.eu"
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -61,7 +66,7 @@ char to_email[BUFSZ] = {0};
 char host[BUFSZ] = {0};
 
 int main(int c, char **v) {
-    chdir("/home/insom");
+    chdir(HOMEDIR);
     uname(&uts);
     printf("220 %s ESMTP Metropolitan Transportation Authority\r\n", uts.nodename);
     fflush(stdout);
@@ -113,7 +118,7 @@ int RCPT(char *verb, char *rest) {
     char *email = strsep(&rest, "> \r\n");
     // copy for above reason.
     // todo: you're better than this.
-    if(strcasecmp("xeu@ve3x.eu", email) == 0) {
+    if(strcasecmp(EMAIL_ADDRESS, email) == 0) {
         strncpy(to_email, email, strlen(email));
         printf("250 %s de %s.\r\n", to_email, from_email);
     } else {
