@@ -5,6 +5,8 @@
 #include <sys/socket.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <time.h>
+#include <unistd.h>
 
 #define BUFSZ 512
 
@@ -59,6 +61,7 @@ char to_email[BUFSZ] = {0};
 char host[BUFSZ] = {0};
 
 int main(int c, char **v) {
+    chdir("/home/insom");
     uname(&uts);
     printf("220 %s ESMTP Metropolitan Transportation Authority\r\n", uts.nodename);
     fflush(stdout);
@@ -126,12 +129,17 @@ int DATA(char *verb, char *rest) {
     }
     printf("354 go on.\r\n");
     fflush(stdout);
-    // then 250 after the last `.`
-    FILE *mb = fopen("mailbox", "w");
+
+    char filename[BUFSZ] = {0};
+    char final_filename[BUFSZ] = {0};
+    time_t t = time(NULL);
+    sprintf(filename, "Maildir/tmp/%d.%d.tombstone", t, getpid());
+    sprintf(final_filename, "Maildir/new/%d.%d.tombstone", t, getpid());
+
+    FILE *mb = fopen(filename, "w");
     fprintf(mb, "Return-path: <%s>\n", from_email);
     fprintf(mb, "Envelope-to: %s\n", to_email);
-    fprintf(mb, "Delivery-date: Mon, 08 Jan 2024 09:01:19 +0000\n");
-    fprintf(mb, "Received: from %s ([ip.addr])\n", host);
+    fprintf(mb, "Received: from %s\n", host);
 
     char *line = NULL;
     size_t line_bufsz = 0;
@@ -141,6 +149,7 @@ int DATA(char *verb, char *rest) {
         if(strcasecmp(line, ".\r\n") == 0) {
             printf("200 yuhuh.\r\n");
             fclose(mb);
+            rename(filename, final_filename);
             goto end;
         } else {
             char *orig_line = strsep(&line, "\r\n");

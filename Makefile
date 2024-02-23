@@ -1,2 +1,2 @@
 mta: mta.c
-	cc mta.c -o mta
+	cc mta.c -g -o mta
