@@ -12,6 +12,7 @@
 #include <netdb.h>
 #include <time.h>
 #include <unistd.h>
+#include <assert.h>
 
 #define BUFSZ 512
 
@@ -101,6 +102,7 @@ int MAIL(char *verb, char *rest) {
     if(*rest == '<') rest++;
     char *email = strsep(&rest, "> \r\n");
     // copy, because the buffer we're using is about to get freed.
+    assert(strlen(email) < BUFSIZ);
     strncpy(from_email, email, strlen(email));
     printf("250 cq de %s.\n", from_email);
     return RES_NOOP;
