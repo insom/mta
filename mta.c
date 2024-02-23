@@ -38,6 +38,7 @@ int handle_line(void) {
     char *original_line = line; // for freeing later
 
     if(line_length == -1) return RES_QUIT;
+    if(!(line_length < BUFSZ)) return RES_QUIT;
 
     char *verb = strsep(&line, " \r\n");
 
@@ -102,7 +103,6 @@ int MAIL(char *verb, char *rest) {
     if(*rest == '<') rest++;
     char *email = strsep(&rest, "> \r\n");
     // copy, because the buffer we're using is about to get freed.
-    assert(strlen(email) < BUFSIZ);
     strncpy(from_email, email, strlen(email));
     printf("250 cq de %s.\n", from_email);
     return RES_NOOP;
@@ -154,7 +154,7 @@ int DATA(char *verb, char *rest) {
         size_t line_length = getline(&line, &line_bufsz, stdin);
         if(line_length == -1) return RES_QUIT;
         if(strcasecmp(line, ".\r\n") == 0) {
-            printf("200 yuhuh.\r\n");
+            printf("250 yuhuh.\r\n");
             fclose(mb);
             rename(filename, final_filename);
             goto end;
