@@ -13,6 +13,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <assert.h>
+#include <syslog.h>
 
 #define BUFSZ 512
 
@@ -74,6 +75,8 @@ int main(int c, char **v) {
     fflush(stdout);
     int err = getpeername(0, &peer, &peersz);
 
+    openlog("mta", 0, LOG_MAIL);
+
     for(;;) {
         int res = handle_line();
         if(res == RES_QUIT) {
@@ -89,6 +92,7 @@ int HELO(char *verb, char *rest) {
         strcpy(host, "unknown"); // it's cool, I can trust me.
     }
     printf("250 %s hi. [%s]\r\n", uts.nodename, host);
+    syslog(LOG_INFO, "Connection from %s", host);
     return RES_NOOP;
 }
 
@@ -105,6 +109,7 @@ int MAIL(char *verb, char *rest) {
     // copy, because the buffer we're using is about to get freed.
     strncpy(from_email, email, strlen(email));
     printf("250 cq de %s.\n", from_email);
+    syslog(LOG_INFO, "Mail from %s", from_email);
     return RES_NOOP;
 }
 
@@ -120,6 +125,7 @@ int RCPT(char *verb, char *rest) {
     char *email = strsep(&rest, "> \r\n");
     // copy for above reason.
     // todo: you're better than this.
+    syslog(LOG_INFO, "Mail to %s", email);
     if(strcasecmp(EMAIL_ADDRESS, email) == 0) {
         strncpy(to_email, email, strlen(email));
         printf("250 %s de %s.\r\n", to_email, from_email);
